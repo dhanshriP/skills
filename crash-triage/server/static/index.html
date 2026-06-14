@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crash Triage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EEF1F5;--surface:#FFFFFF;--surface-2:#F7F9FB;--line:#DCE2EA;--line-strong:#C4CCD6;
+    --ink:#101826;--muted:#5C6776;--faint:#8A94A2;--accent:#1F3A5F;
+    --halt:#C8362B;--halt-bg:#FBEAE8;--halt-line:#E7B7B1;
+    --warn:#9A6510;--warn-bg:#FAF1DE;--warn-line:#E6CF9C;
+    --ok:#0E7A57;--ok-bg:#E5F3EC;--ok-line:#A9D7C3;
+    --sans:'Inter',system-ui,sans-serif;--display:'Space Grotesk',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace;--r:10px;
+  }
+  *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 20px 56px;}
+  .topbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 18px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);}
+  .logo{font-family:var(--display);font-weight:700;font-size:18px;letter-spacing:-0.02em;} .logo b{color:var(--accent);}
+  .sub{font-family:var(--mono);font-size:11px;color:var(--faint);} .spacer{flex:1;}
+  .tag{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:4px 8px;border-radius:6px;color:var(--accent);background:#E7ECF3;border:1px solid #CDD8E6;}
+  .notice{margin-top:12px;display:flex;gap:10px;padding:11px 14px;background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:var(--r);font-size:12.5px;color:#6b4910;}
+  .grid{display:grid;grid-template-columns:380px minmax(0,1fr);gap:14px;margin-top:14px;}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);}
+  .panel-head{padding:12px 16px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);}
+  .form{padding:16px;}
+  label{display:block;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:var(--faint);margin:0 0 6px;}
+  .row{display:flex;gap:10px;margin-bottom:14px;} .row>div{flex:1;}
+  textarea,input,select{width:100%;font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:9px 10px;}
+  textarea{min-height:150px;resize:vertical;line-height:1.5;white-space:pre;}
+  textarea:focus,input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);}
+  .ios-only{display:none;} .android-only{display:block;}
+  button{font-family:var(--sans);font-size:13px;cursor:pointer;border-radius:8px;padding:10px 16px;font-weight:600;border:1px solid transparent;}
+  .btn-primary{background:var(--accent);color:#fff;} .btn-primary:hover{background:#16293f;} .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .out{padding:18px;min-height:300px;}
+  .empty{color:var(--faint);font-size:13px;display:flex;height:280px;align-items:center;justify-content:center;text-align:center;padding:0 30px;line-height:1.6;}
+  .loading{display:flex;height:280px;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:var(--muted);}
+  .spinner{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;}
+  @media (prefers-reduced-motion:no-preference){.spinner{animation:spin .8s linear infinite;}} @keyframes spin{to{transform:rotate(360deg);}}
+  .group-label{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--faint);margin:0 0 10px;display:flex;align-items:center;gap:8px;} .group-label::after{content:"";flex:1;height:1px;background:var(--line);} .group-label.lower{margin-top:22px;}
+  .ev-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+  .field{border:1px solid var(--line);border-radius:9px;padding:12px 13px;} .field.full{grid-column:1 / -1;}
+  .k{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:var(--faint);margin-bottom:6px;}
+  .v{font-size:13.5px;color:var(--ink);} .v.mono{font-family:var(--mono);}
+  .reason{margin:0;color:var(--muted);font-size:12.5px;line-height:1.5;}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:6px;}
+  .chip.ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line);}
+  .chip.warn{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line);}
+  .chip.halt{color:var(--halt);background:var(--halt-bg);border:1px solid var(--halt-line);}
+  .chip.neutral{color:var(--muted);background:var(--surface-2);border:1px solid var(--line);}
+  .sev{font-family:var(--mono);font-weight:700;font-size:15px;} .sev.P1{color:var(--halt);} .sev.P2{color:var(--warn);} .sev.P3{color:var(--muted);}
+  .conf-bar{height:7px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:8px;} .conf-fill{height:100%;border-radius:4px;}
+  a.pr{color:var(--accent);font-family:var(--mono);font-weight:600;text-decoration:none;} a.pr:hover{text-decoration:underline;}
+  .statusbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+  .err{color:var(--halt);font-size:13px;padding:18px;line-height:1.6;}
+  .disclaim{margin-top:14px;font-size:11.5px;color:var(--faint);line-height:1.5;border-top:1px solid var(--line);padding-top:12px;}
+  .prompt{border:1px solid var(--line-strong);border-radius:9px;padding:14px;background:var(--surface-2);display:flex;flex-wrap:wrap;align-items:center;gap:12px;font-size:13.5px;font-weight:500;}
+  .prompt .inline{display:flex;align-items:center;gap:6px;font-family:var(--sans);font-size:12.5px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;margin:0;}
+  .prompt .inline input{width:auto;}
+  .prompt-btns{display:flex;gap:8px;margin-left:auto;}
+  #action-result{margin-top:12px;}
+  @media (max-width:880px){.grid{grid-template-columns:1fr;}.ev-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <span class="logo">Crash<b>Triage</b></span>
+    <span class="sub">// local · appdynamics → ai → git</span>
+    <span class="tag">Local build</span>
+    <span class="spacer"></span>
+    <span class="sub" id="model-label">model: env LLM_MODEL</span>
+  </div>
+  <div class="notice"><span>⚠</span><span>Synthetic data only while testing. Real crash payloads stay inside your approved environment. PII is redacted server-side before the model sees anything.</span></div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-head">Crash input</div>
+      <div class="form">
+        <div class="row">
+          <div><label for="platform">Platform</label>
+            <select id="platform"><option>Android</option><option>iOS</option></select></div>
+          <div><label for="version">Version</label><input id="version" value="5.2.1"></div>
+          <div><label for="build">Build</label><input id="build" value="5210"></div>
+        </div>
+        <label for="trace">Stacktrace</label>
+        <textarea id="trace" spellcheck="false"></textarea>
+        <div style="margin:14px 0;">
+          <div class="android-only" id="android-map-wrap">
+            <label for="mapping">Android mapping.txt (paste — for retrace)</label>
+            <textarea id="mapping" style="min-height:90px" spellcheck="false" placeholder="com.bank.payments.TransferReviewFragment -> a.b.c:&#10;    void confirm() -> a"></textarea>
+          </div>
+          <div class="ios-only" id="ios-map-wrap">
+            <label for="dsym">iOS dSYM path (server-side path — dSYM is binary)</label>
+            <input id="dsym" placeholder="/path/to/MyApp.app.dSYM">
+          </div>
+        </div>
+        <div class="row">
+          <div><label for="flow">Flow hint (optional)</label><input id="flow" placeholder="Transfer"></div>
+          <div><label for="appd">AppD crash id (optional)</label><input id="appd" placeholder="leave blank to use paste"></div>
+        </div>
+        <button class="btn-primary" id="analyze">Analyze crash</button>
+        <p class="disclaim">If an AppDynamics crash id is given and the server is configured, the trace is pulled automatically; otherwise the pasted trace is used.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">Analysis · auto-generated · human approval required</div>
+      <div class="out" id="out"><div class="empty">Fill the form and run Analyze.<br>The server symbolicates, redacts PII, asks the model for a root-cause hypothesis, then resolves the suspect PR and owners from git.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SAMPLE = `Fatal Exception: java.lang.NullPointerException
+  at com.bank.payments.TransferReviewFragment.confirm(TransferReviewFragment.kt:214)
+  at com.bank.payments.TransferViewModel.submit(TransferViewModel.kt:88)
+--- Breadcrumbs ---
+[t-3s] tap: recipient_select acct=4716 1234 5678 9012
+[t-0s] tap: confirm_transfer (double-tap)`;
+document.getElementById('trace').value = SAMPLE;
+
+const platform = document.getElementById('platform');
+platform.addEventListener('change', ()=>{
+  const ios = platform.value === 'iOS';
+  document.getElementById('android-map-wrap').style.display = ios ? 'none':'block';
+  document.getElementById('ios-map-wrap').style.display = ios ? 'block':'none';
+});
+
+const out = document.getElementById('out');
+const btn = document.getElementById('analyze');
+const esc = s => String(s==null?'':s).replace(/</g,'&lt;');
+const chip=(c,t)=>`<span class="chip ${c}">${t}</span>`;
+function statusChip(s){const m={ok:'ok',symbolicated:'ok',error:'halt',raw:'halt',skipped:'neutral',partial:'warn'};return chip(m[s]||'neutral',s);}
+
+function render(d){
+  const ai = d.ai||{};
+  const git = d.git||{};
+  const sec = d.sections||{};
+  const conf = Math.max(0,Math.min(100,Number(ai.confidence)||0));
+  const confColor = conf>=70?'var(--ok)':conf>=40?'var(--warn)':'var(--halt)';
+  const sev=(ai.severity||'P3').toUpperCase();
+  const red = (sec.redaction&&sec.redaction.findings)||[];
+  const piiBlock = red.length
+    ? chip('halt','⚠ redacted: '+red.map(f=>f.type+'×'+f.count).join(', '))
+    : chip('ok','none detected');
+  const appChip = ai.is_app_code===false ? chip('neutral','no — '+esc(ai.internal_module||'third-party/OS')) : chip('ok','yes — app code');
+
+  const prBlock = git.pr
+    ? `<a class="pr" href="${esc(git.pr.url)}" target="_blank" rel="noopener">PR #${esc(git.pr.number)}</a> <span class="v mono" style="color:var(--muted)">· ${esc(git.pr.title)}</span>`
+    : `<span class="v mono" style="color:var(--faint)">${esc(git.note||'not resolved')}</span>`;
+  const owner = git.primary_owner_suspect ? `<span class="v mono">${esc(git.primary_owner_suspect)}</span>` : `<span class="v mono" style="color:var(--faint)">${esc(git.note||'—')}</span>`;
+  const reviewers = (git.reviewers_to_loop_in&&git.reviewers_to_loop_in.length) ? git.reviewers_to_loop_in.map(esc).join(', ') : '—';
+
+  out.innerHTML = `
+    <div class="statusbar">
+      ${sec.symbolication?'symbolication '+statusChip(sec.symbolication.status):''}
+      ${sec.llm?'model '+statusChip(sec.llm.status):''}
+      ${git.status?'git '+statusChip(git.status):''}
+      ${sec.appdynamics?'appd '+statusChip(sec.appdynamics.status):''}
+    </div>
+
+    <div class="group-label">Inferred from the trace · AI</div>
+    <div class="ev-grid">
+      <div class="field"><div class="k">Severity</div><div class="v sev ${sev}">${sev}</div></div>
+      <div class="field"><div class="k">Affected flow</div><div class="v mono">${esc(ai.flow||'—')}</div></div>
+      <div class="field"><div class="k">Is it our code?</div><div class="v">${appChip}</div></div>
+      <div class="field"><div class="k">Internal module / lib</div><div class="v mono">${esc(ai.internal_module||'—')}</div></div>
+      <div class="field full"><div class="k">Root-cause hypothesis</div><p class="reason">${esc(ai.root_cause||'—')}</p></div>
+      <div class="field"><div class="k">Suspected file:line</div><div class="v mono">${esc(ai.suspected_file||'—')}${ai.suspected_line?':'+esc(ai.suspected_line):''}</div></div>
+      <div class="field"><div class="k">Owner hint (team)</div><div class="v mono">${esc(ai.owner_hint||'—')}</div></div>
+      <div class="field full"><div class="k">Sensitive-data scan</div><div class="v">${piiBlock}</div></div>
+      <div class="field full"><div class="k">Confidence — ${conf}%</div><div class="conf-bar"><div class="conf-fill" style="width:${conf}%;background:${confColor}"></div></div></div>
+    </div>
+
+    <div class="group-label lower">Resolved from git · suspect leads</div>
+    <div class="ev-grid">
+      <div class="field full"><div class="k">Suspect PR</div><div class="v">${prBlock}</div></div>
+      <div class="field"><div class="k">Primary owner — last committer (suspect)</div><div>${owner}</div></div>
+      <div class="field"><div class="k">Reviewers to loop in</div><div class="v mono">${esc(reviewers)}</div></div>
+    </div>
+    <p class="disclaim">"Last committer" is who last touched the line, not proof of cause. Reviewers are people to involve, not blame. Everything here is a lead for human review.</p>
+
+    <div class="group-label lower">Next step</div>
+    <div id="action-area">
+      <div class="prompt">
+        <span>Raise a draft PR for this fix?</span>
+        <label class="inline"><input type="checkbox" id="alsojira" checked> also create a Jira ticket</label>
+        <div class="prompt-btns">
+          <button class="btn-primary" id="do-pr">Yes — open draft PR</button>
+          <button class="btn-ghost" id="no-pr">Not now</button>
+        </div>
+      </div>
+      <div id="action-result"></div>
+    </div>
+  `;
+
+  // stash context for the PR / Jira calls
+  window._ctx = {
+    severity: ai.severity||'', flow: ai.flow||'', root_cause: ai.root_cause||'',
+    internal_module: ai.internal_module||'', suspected_file: (ai.suspected_file||'') + (ai.suspected_line?(':'+ai.suspected_line):''),
+    platform: document.getElementById('platform').value,
+    version: document.getElementById('version').value, build: document.getElementById('build').value,
+    pr_link: (git.pr&&git.pr.url)||'',
+    primary_owner_suspect: git.primary_owner_suspect||'',
+    reviewers: git.reviewers_to_loop_in||[],
+  };
+  document.getElementById('do-pr').addEventListener('click', raisePR);
+  document.getElementById('no-pr').addEventListener('click', ()=>{ document.getElementById('action-area').innerHTML='<p class="disclaim">No PR raised.</p>'; });
+}
+
+async function raisePR(){
+  const ar = document.getElementById('action-result');
+  ar.innerHTML = '<div class="loading" style="height:80px"><div class="spinner"></div></div>';
+  const payload = Object.assign({}, window._ctx, {create_jira: document.getElementById('alsojira').checked});
+  try{
+    const res = await fetch('/api/raise-pr', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const d = await res.json();
+    let html = '';
+    if(d.jira){ html += d.jira.status==='ok'
+      ? '<div class="field"><div class="k">Jira</div><div class="v"><a class="pr" href="'+esc(d.jira.url)+'" target="_blank" rel="noopener">'+esc(d.jira.key)+'</a></div></div>'
+      : '<div class="field"><div class="k">Jira</div><div class="v mono" style="color:var(--faint)">'+esc(d.jira.note||d.jira.status)+'</div></div>'; }
+    if(d.pr){ html += d.pr.status==='ok'
+      ? '<div class="field"><div class="k">Draft PR</div><div class="v"><a class="pr" href="'+esc(d.pr.url)+'" target="_blank" rel="noopener">'+esc(d.pr.branch)+'</a> · draft, reviewers requested</div></div>'
+      : '<div class="field"><div class="k">Draft PR</div><div class="v mono" style="color:var(--halt)">'+esc(d.pr.note||'error')+'</div></div>'; }
+    if(!html) html = '<div class="field"><div class="v mono" style="color:var(--faint)">'+esc(d.note||'nothing configured')+'</div></div>';
+    ar.innerHTML = '<div class="ev-grid">'+html+'</div><p class="disclaim">Draft only — push the fix to the branch, then take it out of draft for review.</p>';
+  }catch(e){ ar.innerHTML = '<div class="err">'+esc(e.message||e)+'</div>'; }
+}
+
+async function analyze(){
+  const body = {
+    platform: platform.value,
+    version: document.getElementById('version').value,
+    build: document.getElementById('build').value,
+    stacktrace: document.getElementById('trace').value,
+    android_mapping: document.getElementById('mapping').value,
+    ios_dsym_path: document.getElementById('dsym').value,
+    flow_hint: document.getElementById('flow').value,
+    appd_crash_id: document.getElementById('appd').value,
+  };
+  btn.disabled = true;
+  out.innerHTML = '<div class="loading"><div class="spinner"></div><div>Analyzing…</div></div>';
+  try{
+    const res = await fetch('/api/analyze', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const data = await res.json();
+    if(data.error){ out.innerHTML = '<div class="err">'+esc(data.error)+'</div>'; return; }
+    render(data);
+  }catch(e){
+    out.innerHTML = '<div class="err">Request failed: '+esc(e.message||e)+'</div>';
+  }finally{ btn.disabled = false; }
+}
+btn.addEventListener('click', analyze);
+</script>
+</body>
+</html>
