@@ -1,0 +1,25 @@
+<!DOCTYPE html><html><body style="margin:0;background:#ECEEF3;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#ECEEF3;padding:22px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #DDE3EC;border-radius:12px;overflow:hidden;">
+  <tr><td style="background:#13203B;padding:16px 22px;color:#fff;font-size:17px;font-weight:bold;">
+    Crash<span style="color:#9CC0F0;">Triage</span><span style="float:right;font-size:12px;color:#9CC0F0;font-weight:normal;">INC-4823</span></td></tr>
+  <tr><td style="padding:20px 22px 6px;"><table cellpadding="0" cellspacing="0"><tr>
+    <td style="font-size:30px;font-weight:bold;color:#C5362B;padding-right:14px;border-right:1px solid #DDE3EC;">P1</td>
+    <td style="padding-left:14px;">
+      <div style="font-size:11px;color:#8A93A6;text-transform:uppercase;letter-spacing:.5px;">Transfer · payments</div>
+      <div style="font-size:14px;color:#101A2B;font-weight:bold;">Crash assigned to you for review</div></td></tr></table></td></tr>
+  <tr><td style="padding:10px 22px 20px;">
+    <p style="font-size:13px;color:#56627A;line-height:1.55;"><b style="color:#101A2B;">Root cause:</b> Recipient token is read before tokenization completes on a double-tapped Confirm, so TokenStore.current() returns null.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#101A2B;">
+      <tr><td style="padding:6px 0;color:#8A93A6;width:180px;">Owner (suspect)</td><td style="padding:6px 0;">A. Rahman (arahman-bank)</td></tr>
+      <tr><td style="padding:6px 0;color:#8A93A6;">Assignment group</td><td style="padding:6px 0;">Payments</td></tr>
+      <tr><td style="padding:6px 0;color:#8A93A6;">Suspected file</td><td style="padding:6px 0;font-family:Consolas,monospace;">TransferReviewFragment.kt:214</td></tr>
+      <tr><td style="padding:6px 0;color:#8A93A6;">Suspect PR</td><td style="padding:6px 0;">#1410</td></tr>
+      <tr><td style="padding:6px 0;color:#8A93A6;">Reviewers to loop in</td><td style="padding:6px 0;">skapoor-bank, mosei-bank</td></tr>
+      <tr><td style="padding:6px 0;color:#8A93A6;">Sensitive-data scan</td><td style="padding:6px 0;">⚠ pan_or_account×1</td></tr>
+      <tr><td style="padding:6px 0;color:#8A93A6;">Confidence</td><td style="padding:6px 0;">78%</td></tr>
+    </table>
+    <p style="font-size:11px;color:#8A93A6;line-height:1.5;margin-top:14px;">Owner is the last committer of the suspected line — a lead for review, not proof of cause. Nothing has been merged.</p>
+  </td></tr>
+  <tr><td style="padding:4px 22px 6px;"><table cellpadding="0" cellspacing="0"><tr><td style="border-radius:9px;background:#2D4A7C;"><a href="https://github.com/your-org/your-repo/compare/main...triage/INC-4823?expand=1" style="display:inline-block;padding:13px 26px;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">Review &amp; raise draft PR  &#8594;</a></td></tr></table><p style="font-size:11px;color:#8A93A6;line-height:1.5;margin:14px 0 0;">Opens GitHub to create the draft PR (fix + tests already on branch). Nothing merges automatically; review the diff before confirming.</p></td></tr>
+</table></td></tr></table></body></html>
