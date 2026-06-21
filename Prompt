@@ -1,0 +1,44 @@
+Triage this mobile-banking crash. Use the crash-triage skill.
+
+CRASH INPUT
+- Platform: <Android | iOS>
+- App version: <e.g. 5.2.1>
+- Build number: <e.g. 5210>
+- Stacktrace:
+<paste the full stacktrace + any breadcrumbs here>
+
+DO THIS, IN ORDER:
+
+1. Symbolicate if the trace is obfuscated, using the matching mapping file in
+   references/ for this version+build. If no symbol file exists for this build,
+   say so, keep the root cause generic, lower confidence, and do NOT invent
+   class/method names.
+
+2. Redact PII (account numbers, PANs, tokens, emails) before producing any output.
+   Note what was found by type and count, never the value.
+
+3. Find the data:
+   - Root cause and the responsible internal module.
+   - Severity (P1/P2/P3) and affected flow.
+   - Suspected file:line.
+   - Primary owner = last committer of that line via git blame (label it a SUSPECT,
+     not proof). Map the commit to its PR and reviewers.
+   - Assignment group = the owning team.
+   - A confidence score.
+
+4. Build an HTML results page named triage_<id>.html that displays ALL of the above
+   in a clean layout: a header with severity + flow, the root cause, and a table of
+   owner, assignment group, suspected file, suspect PR, reviewers, PII flag, and
+   confidence. Use the same dark-navy styling as the email (navy #13203B, accent
+   #2D4A7C, red/amber/green only for status). Save it and open it so I can see it.
+
+5. Write the findings to triage_result.json (matching the skill's schema, including
+   owner.email and an action_url that is the GitHub create-PR link for the branch).
+
+6. Draft the email: run
+   python scripts/draft_outlook_email.py triage_result.json
+   so it opens as a draft in Outlook addressed to the owner, with the
+   "Review & raise draft PR" button. Do not send it — I will review and send.
+
+GUARDRAILS: draft only, never merge. Owner is a suspect lead, not blame; never
+blame the approver. Original code only. Redact PII before any output.
