@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PH · Event Bus — how plugins talk</title>
+<style>
+  :root{
+    --bg:#0b1020;
+    --panel:#121b32;
+    --panel-stroke:#2b3c63;
+    --gxm-stroke:#26345a;
+    --card:#162038;
+    --card-stroke:#2f3f66;
+    --rail:#3a4d7a;
+    --rail-core:#7b9be6;
+    --ink:#d7e1f7;
+    --ink-dim:#8595bd;
+    --teal:#34d6c8;
+    --amber:#f5b13d;
+    --violet:#a78bfa;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:
+      radial-gradient(1200px 600px at 50% -10%, #18213c 0%, transparent 60%),
+      var(--bg);
+    color:var(--ink);font-family:var(--sans);
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    padding:18px 14px 40px;
+  }
+  .controls{
+    display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+    margin-bottom:14px;
+  }
+  .controls button, .controls .seg{
+    font-family:var(--mono);font-size:12.5px;letter-spacing:.04em;
+    color:var(--ink);background:#16203a;border:1px solid var(--card-stroke);
+    padding:8px 12px;border-radius:9px;cursor:pointer;
+  }
+  .controls button:hover{border-color:var(--rail-core)}
+  .controls .seg{display:inline-flex;gap:4px;padding:4px}
+  .controls .seg button{border:none;background:transparent;padding:5px 9px;border-radius:6px}
+  .controls .seg button.on{background:#26365e}
+  .hint{font-size:12px;color:var(--ink-dim);margin-bottom:10px;font-family:var(--mono)}
+
+  /* The recordable region — capture just this. */
+  .stage{
+    width:min(1000px,100%);
+    background:linear-gradient(180deg,#0c1226,#0a0f1f);
+    border:1px solid #1c2746;border-radius:18px;overflow:hidden;
+    box-shadow:0 30px 80px -40px rgba(0,0,0,.8);
+  }
+  svg{display:block;width:100%;height:auto}
+
+  .frame-label{font-family:var(--mono);font-size:13px;letter-spacing:.12em;fill:var(--ink-dim)}
+  .ph-title{font-family:var(--sans);font-weight:700;font-size:22px;fill:var(--ink)}
+  .ph-sub{font-family:var(--mono);font-size:12.5px;letter-spacing:.1em;fill:var(--ink-dim)}
+
+  .conn{stroke:#2b3a5e;stroke-width:2}
+  .rail-base{stroke:var(--rail);stroke-width:6;stroke-linecap:round}
+  .rail-core{stroke:var(--rail-core);stroke-width:1.6;stroke-linecap:round;opacity:.55;
+    stroke-dasharray:5 12;animation:flow 1.4s linear infinite}
+  @keyframes flow{to{stroke-dashoffset:-34}}
+
+  .card rect.body{fill:var(--card);stroke:var(--card-stroke);stroke-width:1.6;
+    transition:stroke .25s ease, filter .25s ease;}
+  .card text.name{font-family:var(--sans);font-weight:600;font-size:16px;fill:var(--ink);}
+  .card text.role{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;fill:var(--ink-dim);}
+  .card g.box{transition:transform .25s ease;transform-box:fill-box;transform-origin:center;}
+
+  .card.dim rect.body{stroke:#243152}
+  .card.dim text.name{fill:#7e8cb3}
+  .card.pub rect.body, .card.lit rect.body{
+    stroke:var(--glow);filter:drop-shadow(0 0 10px var(--glow));}
+  .card.pub g.box, .card.lit g.box{transform:scale(1.045);}
+  .card.pub text.name, .card.lit text.name{fill:#fff}
+
+  .anchor{fill:#4a5e91}
+  .caption-wrap{padding:14px 22px 18px;border-top:1px solid #1a2440;background:#0a0f1f;}
+  .cap-topic{font-family:var(--mono);font-size:12px;letter-spacing:.1em;
+    padding:2px 8px;border-radius:6px;display:inline-block;margin-right:8px;color:#0a0f1f;font-weight:700}
+  .caption{font-family:var(--sans);font-size:15px;color:var(--ink);min-height:22px;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-family:var(--mono);font-size:11.5px;color:var(--ink-dim)}
+  .legend span.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+  @media (prefers-reduced-motion: reduce){ .rail-core{animation:none} }
+</style>
+</head>
+<body>
+  <div class="controls">
+    <button id="play">⏸ Pause</button>
+    <button id="restart">↺ Restart</button>
+    <span class="seg" role="group" aria-label="Speed">
+      <button data-spd="0.6">0.6×</button>
+      <button data-spd="1" class="on">1×</button>
+      <button data-spd="1.6">1.6×</button>
+    </span>
+  </div>
+  <div class="hint">Record just the framed panel below → export as GIF</div>
+
+  <div class="stage">
+    <svg id="svg" viewBox="0 0 1120 600" role="img" aria-label="PH event bus animation">
+      <!-- built by JS -->
+    </svg>
+    <div class="caption-wrap">
+      <div class="caption" id="caption">
+        <span class="cap-topic" style="background:#6f8fd8">PH</span>
+        Plugins never call each other directly — they publish and subscribe through PH.
+      </div>
+      <div class="legend">
+        <div><span class="sw" style="background:var(--teal)"></span>USER_LOGGED_IN · from Auth</div>
+        <div><span class="sw" style="background:var(--amber)"></span>PAYMENT_DONE · from Payments</div>
+        <div><span class="sw" style="background:var(--violet)"></span>CONFIG_UPDATED · from Config</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const SVGNS="http://www.w3.org/2000/svg";
+const svg=document.getElementById("svg");
+const captionEl=document.getElementById("caption");
+
+const COLORS={teal:"#34d6c8",amber:"#f5b13d",violet:"#a78bfa"};
+const BUS_Y=316, CARD_W=176, CARD_H=84, HALF=CARD_H/2;
+
+// plugin layout: 3 top, 3 bottom
+const NODES={
+  Auth:{cx:330,cy:196,top:true,role:"identity"},
+  Payments:{cx:560,cy:196,top:true,role:"wallet"},
+  Analytics:{cx:790,cy:196,top:true,role:"tracking"},
+  Config:{cx:330,cy:436,top:false,role:"settings"},
+  Notifications:{cx:560,cy:436,top:false,role:"push"},
+  Profile:{cx:790,cy:436,top:false,role:"user data"},
+};
+
+// each event: a publisher emits a topic; listed subscribers receive it
+const EVENTS=[
+  {pub:"Auth", topic:"USER_LOGGED_IN", color:COLORS.teal,
+   subs:["Analytics","Profile"],
+   text:"Auth publishes USER_LOGGED_IN. PH routes one message to every subscriber."},
+  {pub:"Payments", topic:"PAYMENT_DONE", color:COLORS.amber,
+   subs:["Analytics","Notifications"],
+   text:"Payments publishes PAYMENT_DONE. Only plugins subscribed to it react."},
+  {pub:"Config", topic:"CONFIG_UPDATED", color:COLORS.violet,
+   subs:["Auth","Payments","Notifications"],
+   text:"Config publishes CONFIG_UPDATED. One message, many independent listeners."},
+];
+
+// ---------- build static scene ----------
+function el(tag,attrs={}){const e=document.createElementNS(SVGNS,tag);
+  for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
+
+function busAnchor(n){return {x:n.cx,y:BUS_Y};}
+function busEdge(n){return {x:n.cx,y:n.top? n.cy+HALF : n.cy-HALF};} // edge facing rail
+
+// GXM host frame
+svg.appendChild(el("rect",{x:24,y:20,width:1072,height:560,rx:18,
+  fill:"none",stroke:"var(--gxm-stroke)","stroke-width":1.5,"stroke-dasharray":"3 7"}));
+const gxmL=el("text",{x:44,y:46,class:"frame-label"});gxmL.textContent="GXM · HOST APP";svg.appendChild(gxmL);
+
+// PH panel
+svg.appendChild(el("rect",{x:110,y:70,width:900,height:476,rx:16,
+  fill:"var(--panel)",stroke:"var(--panel-stroke)","stroke-width":1.6}));
+const phT=el("text",{x:138,y:104,class:"ph-title"});phT.textContent="PH";svg.appendChild(phT);
+const phS=el("text",{x:176,y:104,class:"ph-sub"});phS.textContent="EVENT BUS · MESSAGE BROKER";svg.appendChild(phS);
+const phNote=el("text",{x:138,y:124,class:"ph-sub"});phNote.textContent="500+ libs depend on this";svg.appendChild(phNote);
+
+// connectors + anchors + cards
+for(const name in NODES){
+  const n=NODES[name];
+  const a=busAnchor(n), e2=busEdge(n);
+  svg.appendChild(el("line",{x1:e2.x,y1:e2.y,x2:a.x,y2:a.y,class:"conn"}));
+  svg.appendChild(el("circle",{cx:a.x,cy:a.y,r:4,class:"anchor"}));
+}
+// rail (draw above connectors so it reads as the spine)
+svg.appendChild(el("line",{x1:250,y1:BUS_Y,x2:870,y2:BUS_Y,class:"rail-base"}));
+svg.appendChild(el("line",{x1:250,y1:BUS_Y,x2:870,y2:BUS_Y,class:"rail-core"}));
+const railLbl=el("text",{x:560,y:BUS_Y-14,"text-anchor":"middle",class:"ph-sub"});
+railLbl.textContent="message bus";svg.appendChild(railLbl);
+
+const cardEls={};
+for(const name in NODES){
+  const n=NODES[name];
+  const g=el("g",{class:"card"});g.style.setProperty("--glow","#6f8fd8");
+  const box=el("g",{class:"box"});
+  const x=n.cx-CARD_W/2, y=n.cy-HALF;
+  box.appendChild(el("rect",{x,y,width:CARD_W,height:CARD_H,rx:12,class:"body"}));
+  const nm=el("text",{x:n.cx,y:n.cy-2,"text-anchor":"middle",class:"name"});nm.textContent=name;
+  const rl=el("text",{x:n.cx,y:n.cy+18,"text-anchor":"middle",class:"role"});rl.textContent=n.role;
+  box.appendChild(nm);box.appendChild(rl);
+  g.appendChild(box);svg.appendChild(g);
+  cardEls[name]=g;
+}
+// packets layer on top
+const pkLayer=el("g",{});svg.appendChild(pkLayer);
+
+// ---------- geometry helper: constant-speed move along polyline ----------
+function moveAlong(pts,t){
+  t=Math.max(0,Math.min(1,t));
+  let total=0;const segs=[];
+  for(let i=0;i<pts.length-1;i++){
+    const dx=pts[i+1].x-pts[i].x, dy=pts[i+1].y-pts[i].y;
+    const L=Math.hypot(dx,dy);segs.push(L);total+=L;
+  }
+  let target=t*total;
+  for(let i=0;i<segs.length;i++){
+    if(target<=segs[i]||i===segs.length-1){
+      const r=segs[i]===0?0:target/segs[i];
+      return {x:pts[i].x+(pts[i+1].x-pts[i].x)*r, y:pts[i].y+(pts[i+1].y-pts[i].y)*r};
+    }
+    target-=segs[i];
+  }
+  return pts[pts.length-1];
+}
+function drawPacket(p,color){
+  const c=el("circle",{cx:p.x,cy:p.y,r:7,fill:color});
+  c.style.filter=`drop-shadow(0 0 8px ${color})`;
+  pkLayer.appendChild(c);
+}
+function clearPackets(){while(pkLayer.firstChild)pkLayer.removeChild(pkLayer.firstChild);}
+function setCardState(name,state,color){
+  const g=cardEls[name];g.classList.remove("pub","lit","dim");
+  if(color)g.style.setProperty("--glow",color);
+  if(state)g.classList.add(state);
+}
+function resetCards(){for(const n in cardEls){cardEls[n].classList.remove("pub","lit","dim");}}
+
+// ---------- timeline engine ----------
+let speed=1;
+const T={emit:700,stagger:130,deliver:1150,hold:950,gap:520};
+let evIdx=0, phase="emit", tStart=performance.now(), running=true, recvMarked=[];
+
+function startEvent(i){
+  evIdx=i;phase="emit";tStart=performance.now();recvMarked=[];
+  const ev=EVENTS[i];
+  resetCards();
+  // dim everyone except participants
+  for(const n in cardEls){
+    if(n!==ev.pub && !ev.subs.includes(n)) cardEls[n].classList.add("dim");
+  }
+  setCardState(ev.pub,"pub",ev.color);
+  captionEl.innerHTML=`<span class="cap-topic" style="background:${ev.color}">${ev.topic}</span>${ev.text}`;
+}
+
+function frame(now){
+  if(running){
+    const ev=EVENTS[evIdx];
+    const pub=NODES[ev.pub];
+    const dur=k=>T[k]/speed;
+    const elapsed=now-tStart;
+    clearPackets();
+
+    if(phase==="emit"){
+      const p=Math.min(elapsed/dur("emit"),1);
+      drawPacket(moveAlong([busEdge(pub),busAnchor(pub)],p),ev.color);
+      if(p>=1){phase="deliver";tStart=now;recvMarked=ev.subs.map(()=>false);}
+    }
+    else if(phase==="deliver"){
+      const pa=busAnchor(pub);
+      let allDone=true;
+      ev.subs.forEach((s,k)=>{
+        const sn=NODES[s];
+        const path=[pa,busAnchor(sn),busEdge(sn)];
+        const local=elapsed-k*dur("stagger");
+        const p=local<=0?-1:Math.min(local/dur("deliver"),1);
+        if(p>=0 && p<1){drawPacket(moveAlong(path,p),ev.color);allDone=false;}
+        else if(p>=1 && !recvMarked[k]){recvMarked[k]=true;setCardState(s,"lit",ev.color);}
+        else if(p<0){allDone=false;}
+      });
+      if(allDone && recvMarked.every(Boolean)){phase="hold";tStart=now;}
+    }
+    else if(phase==="hold"){
+      if(elapsed>=dur("hold")){phase="gap";tStart=now;resetCards();}
+    }
+    else if(phase==="gap"){
+      if(elapsed>=dur("gap")){startEvent((evIdx+1)%EVENTS.length);}
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---------- controls ----------
+const playBtn=document.getElementById("play");
+playBtn.onclick=()=>{running=!running;playBtn.textContent=running?"⏸ Pause":"▶ Play";
+  if(running)tStart=performance.now()-0; };
+document.getElementById("restart").onclick=()=>{startEvent(0);running=true;playBtn.textContent="⏸ Pause";};
+document.querySelectorAll(".seg button").forEach(b=>{
+  b.onclick=()=>{speed=parseFloat(b.dataset.spd);
+    document.querySelectorAll(".seg button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");};
+});
+
+startEvent(0);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
